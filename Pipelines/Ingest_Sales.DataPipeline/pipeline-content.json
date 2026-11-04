@@ -1,0 +1,20 @@
+{
+  "properties": {
+    "activities": [
+      {
+        "name": "Run Sales_Load",
+        "type": "TridentNotebook",
+        "typeProperties": {
+          "notebookId": "7b2f4c1e-9a3d-4e6b-8c5f-1d2e3f4a5b6c",
+          "workspaceId": {
+            "value": "@pipeline().libraryVariables.workspace_id",
+            "type": "Expression"
+          }
+        }
+      }
+    ],
+    "libraryVariables": {
+      "workspace_id": { "libraryName": "vl_settings", "variableName": "workspace_id", "type": "String" }
+    }
+  }
+}

@@ -1,0 +1,115 @@
+name: Promote Fabric items
+
+# Copies selected Fabric item folders from one branch to another through a new
+# promotion branch and a pull request. Supported paths:
+#   any branch -> develop
+#   develop    -> test
+#   test       -> main
+#
+# How to run: Actions -> "Promote Fabric items" -> Run workflow
+# Leave "Use workflow from" on the default branch (the scripts are loaded from it).
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: "Copy FROM"
+        required: true
+        default: "feature branch (type its name below)"
+        type: choice
+        options:
+          - "feature branch (type its name below)"
+          - develop
+          - test
+      feature_branch_name:
+        description: "Feature branch name (only when Copy FROM is 'feature branch', e.g. feature/sales-refresh)"
+        required: false
+        default: ""
+        type: string
+      target_branch:
+        description: "Copy INTO"
+        required: true
+        default: "develop"
+        type: choice
+        options:
+          - develop
+          - test
+          - main
+      item_list:
+        description: "Item folder names, comma-separated (e.g. Sales_Load.Notebook, Ingest_Sales.DataPipeline)"
+        required: true
+        type: string
+      dry_run:
+        description: "Preview only: show what would change, do not create a branch or pull request"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: promote-fabric-items-${{ inputs.target_branch }}
+  cancel-in-progress: false
+
+env:
+  # Allowed source for each target. "*" means any branch.
+  # Format: target=source;target=source. Set ENFORCE_PROMOTION_ORDER to "false" to allow any path.
+  # If your production branch is called something else (e.g. prod), change "main" here
+  # AND in the target_branch options above.
+  PROMOTION_ORDER: "develop=*;test=develop;main=test"
+  ENFORCE_PROMOTION_ORDER: "true"
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.feature_branch_name || inputs.source_branch }} → ${{ inputs.target_branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Work out the Copy FROM branch
+        env:
+          SOURCE_CHOICE: ${{ inputs.source_branch }}
+          FEATURE_BRANCH_NAME: ${{ inputs.feature_branch_name }}
+        run: |
+          feature_branch_name="$(printf '%s' "$FEATURE_BRANCH_NAME" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+          if [[ "$SOURCE_CHOICE" == feature* ]]; then
+            if [[ -z "$feature_branch_name" ]]; then
+              echo "::error::Copy FROM is 'feature branch', so type the feature branch name in the box below it (e.g. feature/sales-refresh)."
+              exit 1
+            fi
+            resolved_source_branch="$feature_branch_name"
+          else
+            if [[ -n "$feature_branch_name" ]]; then
+              echo "::error::Copy FROM is '$SOURCE_CHOICE' but a feature branch name was also typed ('$feature_branch_name'). Clear the name box, or set Copy FROM to 'feature branch'."
+              exit 1
+            fi
+            resolved_source_branch="$SOURCE_CHOICE"
+          fi
+          echo "Copy FROM: $resolved_source_branch"
+          echo "SOURCE_BRANCH=$resolved_source_branch" >> "$GITHUB_ENV"
+
+      # Always use the scripts from the default branch (develop), so test and
+      # main do not need to contain them.
+      - name: Copy promotion scripts from the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/promotion_scripts"
+          for script_name in promote_fabric_items.sh check_fabric_dependencies.py; do
+            git show "origin/$DEFAULT_BRANCH:scripts/$script_name" > "$RUNNER_TEMP/promotion_scripts/$script_name"
+          done
+
+      - name: Promote items and open pull request
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTION_TOKEN != '' && secrets.PROMOTION_TOKEN || github.token }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          ITEM_LIST: ${{ inputs.item_list }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGERED_BY: ${{ github.actor }}
+        run: bash "$RUNNER_TEMP/promotion_scripts/promote_fabric_items.sh"
