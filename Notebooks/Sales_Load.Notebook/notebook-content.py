@@ -14,5 +14,5 @@
 
 # CELL ********************
 
-sales = read_table("raw.sales")
-sales.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("curated.sales")
+sales = clean_sales(read_table("raw.sales"))
+sales.write.mode("overwrite").saveAsTable("curated.sales")
