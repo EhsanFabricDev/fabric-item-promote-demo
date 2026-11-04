@@ -9,12 +9,30 @@
           "workspaceId": {
             "value": "@pipeline().libraryVariables.workspace_id",
             "type": "Expression"
+          },
+          "parameters": {
+            "connection_id": {
+              "value": {
+                "value": "@pipeline().libraryVariables.sales_connection_id",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
           }
         }
       }
     ],
     "libraryVariables": {
-      "workspace_id": { "libraryName": "vl_settings", "variableName": "workspace_id", "type": "String" }
+      "workspace_id": {
+        "libraryName": "vl_settings",
+        "variableName": "workspace_id",
+        "type": "String"
+      },
+      "sales_connection_id": {
+        "libraryName": "vl_settings",
+        "variableName": "sales_connection_id",
+        "type": "String"
+      }
     }
   }
 }
